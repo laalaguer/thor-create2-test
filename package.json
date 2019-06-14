@@ -1,0 +1,15 @@
+{
+  "name": "thor-test",
+  "version": "1.0.0",
+  "description": "thor external test in javascript.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "laalaguer",
+  "license": "ISC",
+  "dependencies": {
+    "ethereumjs-tx": "^2.0.0",
+    "web3": "1.0.0-beta.37"
+  }
+}
