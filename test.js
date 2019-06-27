@@ -10,7 +10,7 @@ const values = require('./constants.js')
 const helpers = require('./helpers.js')
 
 // Build Tx object.
-async function newfactoryTxObject(callerAddress, bytecode){
+async function newTxObject(callerAddress, bytecode){
     let nonceCount = await web3.eth.getTransactionCount(callerAddress)
     
     const txObject = {
@@ -29,11 +29,21 @@ async function newfactoryTxObject(callerAddress, bytecode){
 // Deploy "factory.sol" contract.
 // return factory address.
 async function deployFactoryContract(creatorAddress, factoryBytecode){
-    let txObject = await newfactoryTxObject(creatorAddress,factoryBytecode)
+    let txObject = await newTxObject(creatorAddress,factoryBytecode)
     let tx = await web3.eth.sendTransaction(txObject)
     let receipt = await web3.eth.getTransactionReceipt(tx.transactionHash)
     let factoryAddress = receipt.contractAddress
     return factoryAddress
+}
+
+// Deploy "examer.sol" contract.
+// return examer address.
+async function deployExamerContract(creatorAddress, examerBytecode){
+    let txObject = await newTxObject(creatorAddress, examerBytecode)
+    let tx = await web3.eth.sendTransaction(txObject)
+    let receipt = await web3.eth.getTransactionReceipt(tx.transactionHash)
+    let contractAddr = receipt.contractAddress
+    return contractAddr
 }
 
 // return 'data' of the transaction.
@@ -85,7 +95,27 @@ async function deployAccountContractViaFactory(callerAddress, factoryAddress, fo
 
     let tx = await web3.eth.sendTransaction(txObject)
     let receipt = await web3.eth.getTransactionReceipt(tx.transactionHash)
-    let decoded = web3.eth.abi.decodeLog(eventType, receipt.logs[0].data, receipt.logs[0].topics)
+    // Due to <thor: runtime.go>
+    // It will generate another log of contract creation before the event we emitted. 
+    // So we need to decode receipt.logs[1] rather than receipt.logs[0]
+    /**
+     * OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
+			// set master for created contract
+			rt.state.SetMaster(thor.Address(contractAddr), thor.Address(caller))
+
+			data, err := prototypeSetMasterEvent.Encode(caller)
+			if err != nil {
+				panic(err)
+			}
+
+			stateDB.AddLog(&types.Log{
+				Address: common.Address(contractAddr),
+				Topics:  []common.Hash{common.Hash(prototypeSetMasterEvent.ID())},
+				Data:    data,
+			})
+		},
+     */
+    let decoded = web3.eth.abi.decodeLog(eventType, receipt.logs[1].data, receipt.logs[1].topics)
     return decoded['0'] // account contract address
 }
 
@@ -116,8 +146,18 @@ async function setOwner(accountContractAddress, accountContractAbi, callerAddres
     await accountContract.methods.setOwner(newOwnerAddress).send({from: callerAddress})
 }
 
+// Interact with examer.sol contract.
+// Ask the examer contract which is deployed at contractAddr, 
+// that the extcodehash of inspectedAddr.
+async function getExtCodeHash(contractAddr, contractAbi, inspectedAddr) {
+    const examerContract = new web3.eth.Contract(contractAbi, contractAddr)
+    let codehash = await examerContract.methods.detect(inspectedAddr).call()
+    return codehash
+}
+
 // Run the test.
 async function runTest(){
+    // Test on the CREATE2 opcode.
     let factoryAddress = await deployFactoryContract(values.creatorAddress, values.factoryBytecode)
     console.log("factory.sol deployed at:\t\t\t", factoryAddress)
     // Creator deploy a "account.sol" contract for user.
@@ -139,6 +179,22 @@ async function runTest(){
     let newOwnerAddress = await getOwner(accountContractAddress, values.accountAbi)
     console.log("current acccount.sol contract owner:\t\t", newOwnerAddress)
     console.log("new owner matches?\t\t\t\t", values.bystanderAddress.toLowerCase() === newOwnerAddress.toLowerCase())
+
+    // Test on EXTHASHCODE opcode.
+    let examerAddress = await deployExamerContract(values.creatorAddress, values.examerBytecode)
+    console.log("examer.sol deployed at:\t\t\t\t", examerAddress)
+
+    let creatorCodeHash = await getExtCodeHash(examerAddress, values.examerAbi, values.creatorAddress)
+    console.log("creator extcodehash:\t\t\t\t", creatorCodeHash)
+
+    let userCodeHash = await getExtCodeHash(examerAddress, values.examerAbi, values.userAddress)
+    console.log("user extcodehash:\t\t\t\t", userCodeHash)
+
+    let noneExistCodeHash = await getExtCodeHash(examerAddress, values.examerAbi, values.noneExistAddress)
+    console.log("non-exit extcodehash:\t\t\t\t", noneExistCodeHash)
+
+    let accountContractCodeHash = await getExtCodeHash(examerAddress, values.examerAbi, accountContractAddress)
+    console.log("account.sol extcodehash:\t\t\t", accountContractCodeHash)
 }
 
 runTest().then(res => {console.log("test finished.")})

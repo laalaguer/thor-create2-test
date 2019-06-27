@@ -1,4 +1,8 @@
-# Create2 Feature Test
+# Thor OpCode External Feature Test
+```
+CREATE2
+EXTCODEHASH
+```
 
 ## Topology
 
@@ -13,12 +17,6 @@
 
 ## Run The Test
 
-1. Start the thor in solo mode by command: `thor solo --gas-limit 100000000 --on-demand --persist --api-addr 127.0.0.1:8669 --data-dir ./testnet-data --verbosity 9`
-
-2. Start the `web3-gear` on `http://localhost:8545`
-
-3. Run test
-
 ```
 npm install
 npm run test
@@ -26,12 +24,13 @@ npm run test
 
 ## Files
 ```
-test.js         # main test file.
-helpers.js      # utility functions.
-constants.js    # constant values, to be imported.
-account.sol     # account contract solidity code.
-factory.sol     # factory contract solidigy code.
+account.sol  // target contract to be CREATE2-ed by factory.sol.
+constants.js // Keys/Bytecode/ABI/
+examer.sol   // EXTCODEHASH contract.
+factory.sol  // father contract to deploy account.sol via CREATE2
+helpers.js   // calculation helpers.
+test.js      // main test routine.
 ```
 
-## Tested Solidity Compiler
-`solc 0.5.3`
+## Compiler
+Solidity 0.5.3
